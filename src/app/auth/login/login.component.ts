@@ -20,52 +20,19 @@ export class LoginComponent {
   constructor(private authService: AuthService) { }
 
   onLogin() {
-    this.authService.authenticate(this.username, this.password).then(response => {
-      
-      // Call the function with user credentials
-     authenticateUser(this.username, this.password);
-      
+    this.authService.authenticateUser(this.username, this.password).then(response => {
 
-      // if (response.isMfaRequired) {
-      //   this.isMfaRequired = true;
-      //   this.session = response.session;
-      // }
+      if (response) {
+        console.log(response);
+        // this.isMfaRequired = true;
+        // this.session = response.session;
+      }
     });
   }
 
   onMfaSubmit() {
-    this.authService.respondToMfaChallenge(this.session, this.mfaCode).then(response => {
-      // Handle successful MFA
-    });
+    // this.authService.respondToMfaChallenge(this.session, this.mfaCode).then(response => {
+    //   // Handle successful MFA
+    // });
   }
 }
-function authenticateUser(username: string, password: string) {
-  const authenticationData = {
-    Username: username,
-    Password: password,
-  };
-  const authenticationDetails = new AuthenticationDetails(authenticationData);
-  const poolData = {
-    UserPoolId: 'eu-west-1_uF71SgNIE',
-    ClientId: '1hesrkm76r08f7gq7hbgufhkgi',
-  };
-  const userPool = new CognitoUserPool(poolData);
-  const userData = {
-    Username: username,
-    Pool: userPool,
-  };
-  const cognitoUser = new CognitoUser(userData);
-
-  cognitoUser.authenticateUser(authenticationDetails, {
-    onSuccess: (result) => {
-      console.log('Authentication successful:', result);
-    },
-    onFailure: (err) => {
-      console.error('Authentication failed:', err);
-    },
-    mfaRequired: (codeDeliveryDetails) => {
-      console.log('MFA required:', codeDeliveryDetails);
-    },
-  });
-}
-
