@@ -14,13 +14,12 @@ export class LoginComponent {
   isMfaRequired: boolean = false;
   session: string = "";
 
-     userPoolId = 'eu-west-1_uF71SgNIE';
-     clientId = '1hesrkm76r08f7gq7hbgufhkgi';
+
 
   constructor(private authService: AuthService) { }
 
   onLogin() {
-    this.authService.authenticateUser(this.username, this.password).then(response => {
+    this.authService.authenticateUser(this.username, this.password).then((response: any) => {
 
       if (response) {
         console.log(response);
