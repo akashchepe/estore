@@ -1,2 +1,26 @@
-<p>login works!</p>
-<button (click)="onLogin()">Login</button>
+<div>
+    <h2>Login</h2>
+    <form (ngSubmit)="onLogin()">
+      <label for="username">Username:</label>
+      <input type="text" id="username" [(ngModel)]="username" name="username" required>
+      <label for="password">Password:</label>
+      <input type="password" id="password" [(ngModel)]="password" name="password" required>
+      <label for="enableMfa">Enable MFA:</label>
+      <input type="checkbox" id="enableMfa" [(ngModel)]="enableMfa" name="enableMfa">
+      <button type="submit">Login</button>
+    </form>
+  
+    <div *ngIf="isMfaSetupRequired">
+      <p>Scan this QR code with your Google Authenticator app:</p>
+      <img [src]="qrCodeUrl" alt="QR Code">
+      <p>Enter the MFA code from your authenticator app:</p>
+      <input [(ngModel)]="mfaCode" placeholder="MFA Code">
+      <button (click)="verifyMfaCode()">Verify</button>
+    </div>
+  
+    <div *ngIf="isMfaRequired">
+      <p>Enter the MFA code sent to your device:</p>
+      <input [(ngModel)]="mfaCode" placeholder="MFA Code">
+      <button (click)="onMfaSubmit()">Submit</button>
+    </div>
+  </div>

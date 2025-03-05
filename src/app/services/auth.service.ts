@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
-import { CognitoIdentityProviderClient, InitiateAuthCommand, RespondToAuthChallengeCommand, AssociateSoftwareTokenCommand, VerifySoftwareTokenCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { CognitoIdentityProviderClient, InitiateAuthCommand, RespondToAuthChallengeCommand, AssociateSoftwareTokenCommand, VerifySoftwareTokenCommand, SetUserMFAPreferenceCommand, AdminUpdateUserAttributesCommand } from '@aws-sdk/client-cognito-identity-provider';
+import * as QRCode from 'qrcode';
 
 @Injectable({
   providedIn: 'root'
@@ -7,6 +8,7 @@ import { CognitoIdentityProviderClient, InitiateAuthCommand, RespondToAuthChalle
 export class AuthService {
   private client = new CognitoIdentityProviderClient({ region: 'eu-central-1' });
   private clientId = '4gca0d9hmn8eojvmruv49gvb9m';
+  private userPoolId = 'eu-central-1_example'; // Replace with your user pool ID
 
   constructor() { }
 
@@ -26,7 +28,7 @@ export class AuthService {
         console.log('MFA required:', response.ChallengeParameters);
         // Handle MFA challenge
         if (response.Session) {
-          this.handleMfaChallenge(response.Session);
+          return { isMfaRequired: true, session: response.Session, username };
         } else {
           console.error('Session is undefined');
         }
@@ -34,7 +36,8 @@ export class AuthService {
         console.log('MFA setup required:', response.ChallengeParameters);
         // Handle MFA setup
         if (response.Session) {
-          this.handleMfaSetup(response.Session);
+          const qrCodeUrl = await this.handleMfaSetup(response.Session);
+          return { isMfaSetupRequired: true, qrCodeUrl, session: response.Session, username };
         } else {
           console.error('Session is undefined');
         }
@@ -44,45 +47,37 @@ export class AuthService {
         localStorage.setItem('accessToken', response.AuthenticationResult?.AccessToken || '');
         localStorage.setItem('idToken', response.AuthenticationResult?.IdToken || '');
         localStorage.setItem('refreshToken', response.AuthenticationResult?.RefreshToken || '');
+        return { isAuthenticated: true };
       }
     } catch (error) {
       console.error('Authentication failed:', error);
+      return { isAuthenticated: false };
     }
   }
 
-  private handleMfaChallenge(session: string) {
-    // Implement logic to handle MFA challenge, e.g., prompt user for MFA code
-    // For example, you can store the session and prompt the user to enter the MFA code
-  }
-
-  private async handleMfaSetup(session: string) {
+  private async handleMfaSetup(session: string): Promise<string> {
     try {
       const response = await this.associateSoftwareToken(session);
       console.log('MFA setup response:', response);
       // Display the secret code to the user to configure their TOTP authenticator app
       const secretCode = response.SecretCode;
-      alert(`Scan this QR code with your Google Authenticator app: otpauth://totp/YourAppName?secret=${secretCode}`);
-      // Prompt user to enter the MFA code from their authenticator app
-      const mfaCode = prompt('Enter the MFA code from your authenticator app:');
-      if (mfaCode) {
-        const isVerified = await this.verifyMfaToken(session, mfaCode);
-        if (isVerified) {
-          console.log('MFA setup and verification successful');
-        } else {
-          console.error('MFA verification failed');
-        }
-      }
+      const otpauthUrl = `otpauth://totp/EStore?secret=${secretCode}`;
+
+      // Generate QR code
+      const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
+      return qrCodeDataUrl;
     } catch (error) {
       console.error('Error during MFA setup:', error);
+      throw error;
     }
   }
 
-  async respondToMfaChallenge(session: string, mfaCode: string): Promise<any> {
+  async respondToMfaChallenge(username: string, session: string, mfaCode: string): Promise<any> {
     const command = new RespondToAuthChallengeCommand({
-      ChallengeName: 'SMS_MFA',
+      ChallengeName: 'SOFTWARE_TOKEN_MFA',
       ChallengeResponses: {
-        USERNAME: 'your-username', // Replace with the actual username
-        SMS_MFA_CODE: mfaCode,
+        USERNAME: username,
+        SOFTWARE_TOKEN_MFA_CODE: mfaCode,
       },
       ClientId: this.clientId,
       Session: session,
@@ -95,8 +90,10 @@ export class AuthService {
       localStorage.setItem('accessToken', response.AuthenticationResult?.AccessToken || '');
       localStorage.setItem('idToken', response.AuthenticationResult?.IdToken || '');
       localStorage.setItem('refreshToken', response.AuthenticationResult?.RefreshToken || '');
+      return { isAuthenticated: true };
     } catch (error) {
       console.error('Error responding to MFA challenge:', error);
+      return { isAuthenticated: false };
     }
   }
 
@@ -128,6 +125,40 @@ export class AuthService {
     } catch (error) {
       console.error('MFA verification error:', error);
       return false;
+    }
+  }
+
+  async setUserMfaPreference(username: string, accessToken: string, enableMfa: boolean): Promise<void> {
+    const command = new SetUserMFAPreferenceCommand({
+      AccessToken: accessToken,
+      SoftwareTokenMfaSettings: {
+        Enabled: enableMfa,
+        PreferredMfa: enableMfa,
+      },
+    });
+
+    try {
+      await this.client.send(command);
+      console.log(`MFA ${enableMfa ? 'enabled' : 'disabled'} for user: ${username}`);
+    } catch (error) {
+      console.error(`Error setting MFA preference for user: ${username}`, error);
+      throw error;
+    }
+  }
+
+  async updateUserAttributes(username: string, attributes: { Name: string, Value: string }[]): Promise<void> {
+    const command = new AdminUpdateUserAttributesCommand({
+      UserPoolId: this.userPoolId,
+      Username: username,
+      UserAttributes: attributes,
+    });
+
+    try {
+      await this.client.send(command);
+      console.log(`User attributes updated for user: ${username}`);
+    } catch (error) {
+      console.error(`Error updating user attributes for user: ${username}`, error);
+      throw error;
     }
   }
 
